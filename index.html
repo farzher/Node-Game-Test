@@ -1,41 +1,179 @@
-<!DOCTYPE html>
-<html>
-    <head>
-        <meta charset="utf-8" />
-        <title>Node.js Multiplayer Drawing Game | Tutorialzine Demo</title>
-        
-        <!-- The stylesheets -->
-        <link rel="stylesheet" href="assets/css/styles.css" />
-        
-        <!--[if lt IE 9]>
-          <script src="http://html5shiv.googlecode.com/svn/trunk/html5.js"></script>
-        <![endif]-->
-    </head>
-    
-    <body>
-		<div id="cursors">
-	    	<!-- The mouse pointers will be created here -->
-		</div>
+<div id="chat">
+	<input type="text" id="chat-input" />
+	<br />
+	<textarea id="chat-output" disabled="disabled"></textarea>
+	<audio id="audio" src=""></audio>
+</div>
+<canvas id="canvas"></canvas>
 
-		<canvas id="paper" width="1900" height="1000">
-			Your browser needs to support canvas for this to work!
-		</canvas>
-		
-		<hgroup id="instructions">		
-			<h1>Draw anywhere!</h1>
-			<h2>You will see everyone else who's doing the same.</h2>
-			<h3>Tip: if the stage gets dirty, simply reload the page</h3>
-		</hgroup>
-		
-        <footer>
-	        <h2><i>Tutorial:</i> Node.js Multiplayer Drawing Game</h2>
-            <a class="tzine" href="http://tutorialzine.com/2012/08/nodejs-drawing-game/">Head on to <i>Tutorial<b>zine</b></i> to read and download</a>
-        </footer>
-        
-        <!-- JavaScript includes. Notice that socket.io.js is served by node.js -->
-		<script src="/socket.io/socket.io.js"></script>
-		<script src="http://code.jquery.com/jquery-1.8.0.min.js"></script>
-		<script src="assets/js/script.js"></script>
-        
-    </body>
-</html>
+<style>
+	#chat {position: absolute; top:10px; left:10px;}
+	#chat-output {background: none; height:250px; border:none; resize: none; overflow: hidden;}
+	#chat-input {}
+	#chat-output, #chat-input {width:300px;}
+</style>
+
+<script src="http://cdnjs.cloudflare.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+<script src="http://cdnjs.cloudflare.com/ajax/libs/socket.io/0.9.10/socket.io.min.js"></script>
+<script src="http://cdnjs.cloudflare.com/ajax/libs/underscore.js/1.4.4/underscore-min.js"></script>
+
+<script>
+(function() {
+	// shim layer with setTimeout fallback
+    window.requestAnimFrame = (function() {
+      return  window.requestAnimationFrame       || 
+              window.webkitRequestAnimationFrame || 
+              window.mozRequestAnimationFrame    || 
+              window.oRequestAnimationFrame      || 
+              window.msRequestAnimationFrame     || 
+              function( callback ){
+                window.setTimeout(callback, 1000 / 60);
+              };
+    })();
+
+    var audioList = {};
+    var audioListKeys = [];
+    $.getJSON('get_audio_list.php', function(data) {
+    	_.each(data, function(v) {
+    		var strip = stripMessage(v);
+    		if(!strip) return true;
+    		audioList[strip] = v;
+    		audioListKeys.push(strip);
+    	});
+    	audioListKeys.sort(function(a, b) {
+    		return a.length < b.length ? 1 : -1;
+    	});
+    	console.log(audioListKeys);
+    });
+
+	//connection logic
+	var socket = io.connect('http://71.246.26.9:25565');
+
+	var settings = {};
+	socket.on('settings', function(data) {
+		settings = data;
+		startGame();
+	});
+
+	var gameState = {};
+	socket.on('gameState', function(data) {
+		gameState = data;
+	});
+
+	//chat logic
+	var $chatInput = $('#chat-input');
+	var $chatOutput = $('#chat-output');
+	var $audio = $('#audio');
+	$chatInput.focus();
+	function stripMessage(message) {
+		// remove weird characters and .mp3
+		message = message.replace(/\.mp3/g, '');
+		message = message.replace(/[^\w\s]/g, '');
+		message = message.toLowerCase();
+		// remove multiple spaces
+		message = message.replace(/\s+/g, ' ');
+		return message;
+	}
+	function playAudio(audio) {
+		console.log(audio);
+		$audio.attr('src', 'http://dripmarketingportal.com/farzher/node/audio/'+audio);
+		$audio[0].play();
+	}
+	function playMessage(message) {
+		message = stripMessage(message);
+		$.each(audioListKeys, function(k, v) {
+			if(message.indexOf(v) >= 0) {
+				playAudio(audioList[v]);
+				return false;
+			}
+		});
+	}
+	function receiveMessage(message) {
+		// push message into textarea
+		$chatOutput.val(message+'\n'+$chatOutput.val());
+		//parse message for audio clip
+		playMessage(message);
+	}
+	socket.on('message', function(data) {
+		receiveMessage(data);
+	});
+	$chatInput.on('keydown', function(e) {
+		if(e.which != 13) return;
+
+		socket.emit('message', $chatInput.val());
+		$chatInput.val('');
+	});
+
+	// when we get our settings, start rendering the game
+	function startGame() {
+		//we're done loading, let's go
+
+		// drawing
+		var canvas = document.getElementById('canvas');
+		var c = canvas.getContext('2d');
+		var w = settings.width;
+	    var h = settings.height;
+		c.canvas.width  = w;
+		c.canvas.height = h;
+
+		//event management
+		//this setup doesn't spam key events while held down
+		var keyState = {};
+		$(window).on('keydown', function(e) {
+			var keyCode = e.which;
+			var lastState = keyState[keyCode];
+			var currentState = keyState[keyCode] = true;
+			if(lastState !== currentState) {
+				socket.emit('keydown', keyCode);
+			}
+		});
+		$(window).on('keyup', function(e) {
+			var keyCode = e.which;
+			var lastState = keyState[keyCode];
+			var currentState = keyState[keyCode] = false;
+			if(lastState !== currentState) {
+				socket.emit('keyup', keyCode);
+			}
+		});
+
+		// update loop
+		(function updateLoop() {
+	    	requestAnimFrame(updateLoop);
+	    	//
+
+
+		})();
+
+		var assets = {};
+		assets.guy = new Image();
+		assets.guy.src = 'http://dripmarketingportal.com/farzher/node/assets/guy.png';
+
+	    // render loop
+	    (function renderLoop() {
+	    	requestAnimFrame(renderLoop);
+	    	//
+
+	    	if(!gameState) return;
+			//gameState is loaded
+
+	    	//redraw a white background
+			c.fillStyle = "rgb(255, 200, 200)";
+			c.fillRect(0, 0, w, h);
+
+			_.each(gameState.bullets, function(v) {
+				c.fillStyle = "rgb(0,0,0)";
+				c.fillRect (v.x, v.y, 5, 5);
+			});
+			_.each(gameState.clients, function(v) {
+				if(settings.id == v.id) {
+					c.fillStyle = "rgb(0,0,200)";
+				} else {
+					c.fillStyle = "rgb(200,0,0)";
+				}
+				c.fillRect (v.x, v.y, 1, 1);
+				c.drawImage(assets.guy, v.x, v.y);
+			});
+		})();
+	}
+})();
+</script>
