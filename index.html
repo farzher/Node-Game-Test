@@ -32,12 +32,9 @@
     })();
 
 	//connection logic
-	var mmio = io.connect('http://71.246.26.9/mm:25565');
-	mmio.on('game', function(gameId) {
-		var gameio = io.connect('http://71.246.26.9/game:25565');
-		gameio.on('start', function() {
-			console.log('start');
-		});
+	var socket = io.connect('http://71.246.26.9:25565');
+	socket.on('start', function(gameId) {
+		console.log(gameId);
 	});
 	
 	// when we get our settings, start rendering the game

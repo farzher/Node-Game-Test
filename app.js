@@ -1,94 +1,62 @@
 // imports
 var port = process.env.PORT || 25565;
-var io = require('socket.io').listen(port, {origins: '*:*'});
+var io = require('socket.io').listen(port);
 var _ = require('underscore');
 
 //game logic
 //active game rooms
 var games = [];
-
-function Player(socket) {
-	this.id = socket.id;
-	this.socket = socket;
-}
 function Game(gameId) {
+	//init
 	this.gameId = gameId;
-	players = [];
 
-	addPlayer = function(player) {
-		players.push(player);
-		if(players.length == 2) {
-			//let's start the game
-			start();
-		}
-	}
-
-	start = function() {
+	this.start = function() {
 		//TODO: start the game
-		emit('start', true);
+		this.emit('start', gameId);
 	}
 
-	emit = function(message, data) {
-		_.each(players, function(player) {
-			player.emit(message, data);
-		});
+	this.emit = function(message, data) {
+		io.sockets.in(gameId).emit(message, data);
 	}
 
-	exit = function(player, message) {
+	//when a player disconnects, they forfeit the game
+	//let the other player know they won
+	//socket is the player that left
+	this.exit = function(socket) {
 
 	}
 }
-Game.findById = function(gameId) {
-	return _.findWhere(games, {gameId: gameId});
-}
-
-var gameio = io.of('/game');
-gameio.on('connection', function(socket) {
-	socket.on('game', function(gameId) {
-		var game = Game.findById(gameId);
-		var player = new Player(socket, gameId);
-		game.addPlayer(player);
-	});
-	socket.on('disconnect', function(socket) {
-		_.every(games, function(game) {
-			var player = _.findWhere(game.players, {id: socket.id});
-			if(player) {
-				game.exit(player, 'The other player left the game.');
-				return false;
-			}
-		});
-	});
-});
 
 //matchmaking
 //currently only works for 1v1 matchmaking
-(function() {
-	function mmClient(socket) {
-		this.id = socket.id;
-	}
-	var mmio = io.of('/mm');
-	var mmClients = [];
-	mmio.on('connection', function(socket) {
-		var client = new mmClient(socket);
-		mmClients.push(client);
+io.sockets.on('connection', function(socket) {
+	//when a player connects to the server, put them in the matchmaking room
+	socket.join('mm');
 
-		if(mmClients.length == 2) {
-			//we have two people, let's match them up into a game
-			var gameId = _.uniqueId();
-			games.push(new Game(gameId));
-			_.each(mmClients, function(client) {
-				client.emit('game', gameId);
-			});
-			mmClients = [];
-		}
-		socket.on('disconnect', function(socket) {
-			_.reject(mmClients, function(client) {
-				return client.id = socket.id;
+	var sockets = io.sockets.clients('mm');
+	if(sockets.length == 2) {
+		//when 2 players are in the matchmaking room
+		//make a new unique game
+		var gameId = _.uniqueId();
+		var game = new Game(gameId);
+		games.push(game);
+		
+		//add both players to the new game room
+		_.each(sockets, function(socket) {
+			socket.join(gameId);
+			socket.leave('mm');
+			socket.on('disconnect', function() {
+				//when a plyer disconnects, they forfeit the game
+				//let the other player know that they won and close the game room
+				game.exit(socket);
+				//remove the game from the games array
+				_.reject(games, function(game) {
+					return game.gameId == gameId;
+				});
 			});
 		});
-		//this should never ever happen
-		if(mmClients.length > 2) {
-			socket.disconnect();
-		}
-	});
-})();
+
+		//after the players have been added, start the game
+		game.start();
+	}
+});
