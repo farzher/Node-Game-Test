@@ -13,6 +13,7 @@ function Player(socket) {
 	player.rotation = 0;
 	player.hp = 100;
 	player.keyState = {};
+	player.state = {};
 
 	//player listens for its own events
 	player.socket.on('keydown', function(keyCode) {
@@ -25,10 +26,10 @@ function Player(socket) {
 	//called by game loop every frame
 	player.update = function() {
 		// move
-		if(player.keyState[37]) player.x -= 7;
-		if(player.keyState[38]) player.y -= 7;
-		if(player.keyState[39]) player.x += 7;
-		if(player.keyState[40]) player.y += 7;
+		if(player.keyState[37]) player.x -= 15;
+		if(player.keyState[38]) player.y -= 15;
+		if(player.keyState[39]) player.x += 15;
+		if(player.keyState[40]) player.y += 15;
 		if(player.x < 0) player.x = 0;
 		if(player.x > Game.settings.width) player.x = Game.settings.width;
 		if(player.y > Game.settings.height) player.y = Game.settings.height;
@@ -36,8 +37,17 @@ function Player(socket) {
 	}
 
 	player.getState = function() {
+		var currentState = player.state;
 		var state = _.pick(player, 'id', 'x', 'y', 'rotation', 'hp');
-		return state;
+		var differenceState = {};
+		_.each(state, function(value, key) {
+			var isDifferent = value != currentState[key];
+			if(isDifferent) {
+				differenceState[key] = value;
+			}
+		});
+		player.state = state;
+		return differenceState;
 	}
 }
 
@@ -45,6 +55,7 @@ function Game(gameId) {
 	var game = this;
 	game.gameId = gameId;
 	game.players = [];
+	game.state = {};
 
 	game.start = function() {
 		//send each player game settings
@@ -72,7 +83,7 @@ function Game(gameId) {
 
 	game.emitState = function() {
 		var state = game.getState();
-		game.volatile('state', state);
+		game.emit('state', state);
 	}
 
 	game.getState = function() {
@@ -81,6 +92,7 @@ function Game(gameId) {
 		_.each(game.players, function(player) {
 			state.p.push(player.getState());
 		});
+		game.state = state;
 		return state;
 	}
 
@@ -131,7 +143,7 @@ io.sockets.on('connection', function(socket) {
 	if(sockets.length == 2) {
 		//when 2 players are in the matchmaking room
 		//make a new unique game
-		var gameId = _.uniqueId();
+		var gameId = _.uniqueId('gameId');
 		var game = new Game(gameId);
 		Game.games.push(game);
 		

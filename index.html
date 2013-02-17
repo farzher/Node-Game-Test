@@ -29,9 +29,11 @@
 		settings = data;
 		startGame();
 	});
-	var state = {};
+	var state = {p: []};
 	socket.on('state', function(data) {
-		state = data;
+		_.each(data.p, function(value, key) {
+			state.p[key] = _.extend(state.p[key] || {}, value);
+		});
 	});
 
 	function Player(socket) {
