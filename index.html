@@ -29,11 +29,12 @@
 		settings = data;
 		startGame();
 	});
-	var state = {p: []};
+	var state = {p: [], b: []};
 	socket.on('state', function(data) {
 		_.each(data.p, function(value, key) {
 			state.p[key] = _.extend(state.p[key] || {}, value);
 		});
+		state.b = data.b;
 	});
 
 	function Player(socket) {
@@ -95,13 +96,25 @@
 			c.fillStyle = "rgb(255, 200, 200)";
 			c.fillRect(0, 0, w, h);
 
+			//draw the players
 			_.each(state.p, function(p) {
 				if(player.id == p.id) {
 					c.fillStyle = "rgb(0,0,200)";
 				} else {
 					c.fillStyle = "rgb(200,0,0)";
 				}
-				c.fillRect (p.x, p.y, 25, 25);
+				c.fillRect (p.x, p.y, settings.playerHitbox.x, settings.playerHitbox.y);
+			});
+
+			//draw the bullets
+			_.each(state.b, function(b) {
+				if(player.id == b.playerId) {
+					c.fillStyle = 'rgb(30, 30, 230)';
+				} else {
+					c.fillStyle = 'rgb(230, 30, 30)';
+				}
+				
+				c.fillRect(b.x, b.y, settings.bulletHitbox.x, settings.bulletHitbox.y);
 			});
 		})();
 	}
