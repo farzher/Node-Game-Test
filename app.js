@@ -26,6 +26,7 @@ function Player(socket) {
 	//called by game loop every frame
 	player.update = function() {
 		// move
+		player.y -= 1;
 		if(player.keyState[37]) player.x -= 15;
 		if(player.keyState[38]) player.y -= 15;
 		if(player.keyState[39]) player.x += 15;
@@ -124,10 +125,10 @@ Game.settings = {
 }
 //helper functions
 Game.randomX = function() {
-	return Math.floor(Math.random() * Game.settings.width);
+	return _.random(0, Game.settings.width);
 }
 Game.randomY = function() {
-	return Math.floor(Math.random() * Game.settings.height);
+	return _.random(0, Game.settings.height);
 }
 
 //matchmaking
