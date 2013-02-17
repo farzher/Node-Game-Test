@@ -31,79 +31,15 @@
               };
     })();
 
-    var audioList = {};
-    var audioListKeys = [];
-    $.getJSON('get_audio_list.php', function(data) {
-    	_.each(data, function(v) {
-    		var strip = stripMessage(v);
-    		if(!strip) return true;
-    		audioList[strip] = v;
-    		audioListKeys.push(strip);
-    	});
-    	audioListKeys.sort(function(a, b) {
-    		return a.length < b.length ? 1 : -1;
-    	});
-    	console.log(audioListKeys);
-    });
-
 	//connection logic
-	var socket = io.connect('http://71.246.26.9:25565');
-
-	var settings = {};
-	socket.on('settings', function(data) {
-		settings = data;
-		startGame();
-	});
-
-	var gameState = {};
-	socket.on('gameState', function(data) {
-		gameState = data;
-	});
-
-	//chat logic
-	var $chatInput = $('#chat-input');
-	var $chatOutput = $('#chat-output');
-	var $audio = $('#audio');
-	$chatInput.focus();
-	function stripMessage(message) {
-		// remove weird characters and .mp3
-		message = message.replace(/\.mp3/g, '');
-		message = message.replace(/[^\w\s]/g, '');
-		message = message.toLowerCase();
-		// remove multiple spaces
-		message = message.replace(/\s+/g, ' ');
-		return message;
-	}
-	function playAudio(audio) {
-		console.log(audio);
-		$audio.attr('src', 'http://dripmarketingportal.com/farzher/node/audio/'+audio);
-		$audio[0].play();
-	}
-	function playMessage(message) {
-		message = stripMessage(message);
-		$.each(audioListKeys, function(k, v) {
-			if(message.indexOf(v) >= 0) {
-				playAudio(audioList[v]);
-				return false;
-			}
+	var mmio = io.connect('http://71.246.26.9/mm:25565');
+	mmio.on('game', function(gameId) {
+		var gameio = io.connect('http://71.246.26.9/game:25565');
+		gameio.on('start', function() {
+			console.log('start');
 		});
-	}
-	function receiveMessage(message) {
-		// push message into textarea
-		$chatOutput.val(message+'\n'+$chatOutput.val());
-		//parse message for audio clip
-		playMessage(message);
-	}
-	socket.on('message', function(data) {
-		receiveMessage(data);
 	});
-	$chatInput.on('keydown', function(e) {
-		if(e.which != 13) return;
-
-		socket.emit('message', $chatInput.val());
-		$chatInput.val('');
-	});
-
+	
 	// when we get our settings, start rendering the game
 	function startGame() {
 		//we're done loading, let's go
