@@ -1,17 +1,4 @@
-<div id="chat">
-	<input type="text" id="chat-input" />
-	<br />
-	<textarea id="chat-output" disabled="disabled"></textarea>
-	<audio id="audio" src=""></audio>
-</div>
 <canvas id="canvas"></canvas>
-
-<style>
-	#chat {position: absolute; top:10px; left:10px;}
-	#chat-output {background: none; height:250px; border:none; resize: none; overflow: hidden;}
-	#chat-input {}
-	#chat-output, #chat-input {width:300px;}
-</style>
 
 <script src="http://cdnjs.cloudflare.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
 <script src="http://cdnjs.cloudflare.com/ajax/libs/socket.io/0.9.10/socket.io.min.js"></script>
@@ -33,13 +20,50 @@
 
 	//connection logic
 	var socket = io.connect('http://71.246.26.9:25565');
-	socket.on('start', function(gameId) {
-		console.log(gameId);
+	var settings = {};
+	var id;
+	socket.on('id', function(data) {
+		id = data;
 	});
-	
+	socket.on('settings', function(data) {
+		settings = data;
+		startGame();
+	});
+	var state = {};
+	socket.on('state', function(data) {
+		state = data;
+	});
+
+	function Player(socket) {
+		var player = this;
+		player.id = id;
+		player.socket = socket;
+		player.keyState = {};
+
+		//player does all of its own event management
+		//this setup doesn't spam key events while held down
+		$(window).on('keydown', function(e) {
+			var keyCode = e.which;
+			var lastState = player.keyState[keyCode];
+			var currentState = player.keyState[keyCode] = true;
+			if(lastState !== currentState) {
+				socket.emit('keydown', keyCode);
+			}
+		});
+		$(window).on('keyup', function(e) {
+			var keyCode = e.which;
+			var lastState = player.keyState[keyCode];
+			var currentState = player.keyState[keyCode] = false;
+			if(lastState !== currentState) {
+				socket.emit('keyup', keyCode);
+			}
+		});
+	}
+
 	// when we get our settings, start rendering the game
 	function startGame() {
 		//we're done loading, let's go
+		var player = new Player(socket);
 
 		// drawing
 		var canvas = document.getElementById('canvas');
@@ -49,26 +73,6 @@
 		c.canvas.width  = w;
 		c.canvas.height = h;
 
-		//event management
-		//this setup doesn't spam key events while held down
-		var keyState = {};
-		$(window).on('keydown', function(e) {
-			var keyCode = e.which;
-			var lastState = keyState[keyCode];
-			var currentState = keyState[keyCode] = true;
-			if(lastState !== currentState) {
-				socket.emit('keydown', keyCode);
-			}
-		});
-		$(window).on('keyup', function(e) {
-			var keyCode = e.which;
-			var lastState = keyState[keyCode];
-			var currentState = keyState[keyCode] = false;
-			if(lastState !== currentState) {
-				socket.emit('keyup', keyCode);
-			}
-		});
-
 		// update loop
 		(function updateLoop() {
 	    	requestAnimFrame(updateLoop);
@@ -77,34 +81,25 @@
 
 		})();
 
-		var assets = {};
-		assets.guy = new Image();
-		assets.guy.src = 'http://dripmarketingportal.com/farzher/node/assets/guy.png';
-
 	    // render loop
 	    (function renderLoop() {
 	    	requestAnimFrame(renderLoop);
 	    	//
 
-	    	if(!gameState) return;
-			//gameState is loaded
+	    	if(!state) return;
+			//state is loaded
 
 	    	//redraw a white background
 			c.fillStyle = "rgb(255, 200, 200)";
 			c.fillRect(0, 0, w, h);
 
-			_.each(gameState.bullets, function(v) {
-				c.fillStyle = "rgb(0,0,0)";
-				c.fillRect (v.x, v.y, 5, 5);
-			});
-			_.each(gameState.clients, function(v) {
-				if(settings.id == v.id) {
+			_.each(state.p, function(p) {
+				if(player.id == p.id) {
 					c.fillStyle = "rgb(0,0,200)";
 				} else {
 					c.fillStyle = "rgb(200,0,0)";
 				}
-				c.fillRect (v.x, v.y, 1, 1);
-				c.drawImage(assets.guy, v.x, v.y);
+				c.fillRect (p.x, p.y, 25, 25);
 			});
 		})();
 	}
