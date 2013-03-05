@@ -342,18 +342,26 @@
 		if(keyCode === 87) p1.keyState.up = false;
 		if(keyCode === 68) p1.keyState.right = false;
 		if(keyCode === 83) p1.keyState.down = false;
-		if(keyCode === 74) p1.beginAttack(Player.attacks.attackMiddle);
-		if(keyCode === 75) p1.beginAttack(Player.attacks.attackHigh);
-		if(keyCode === 76) p1.beginAttack(Player.attacks.attackLow);
+		if(p1.keyState.up && keyCode === 74) {
+			p1.beginAttack(Player.attacks.attackHigh);
+		} else if(p1.keyState.down && keyCode === 74) {
+			p1.beginAttack(Player.attacks.attackLow);
+		} else if(keyCode === 74) {
+			p1.beginAttack(Player.attacks.attackMiddle);
+		}
 		// if(keyCode === 186) p1.beginAttack(Player.attacks.grab);
 
 		if(keyCode === 37) p2.keyState.left = false;
 		if(keyCode === 38) p2.keyState.up = false;
 		if(keyCode === 39) p2.keyState.right = false;
 		if(keyCode === 40) p2.keyState.down = false;
-		if(keyCode === 97) p2.beginAttack(Player.attacks.attackMiddle);
-		if(keyCode === 98) p2.beginAttack(Player.attacks.attackHigh);
-		if(keyCode === 99) p2.beginAttack(Player.attacks.attackLow);
+		if(p2.keyState.up && keyCode === 96) {
+			p2.beginAttack(Player.attacks.attackHigh);
+		} else if(p2.keyState.down && keyCode === 96) {
+			p2.beginAttack(Player.attacks.attackLow);
+		} else if(keyCode === 96) {
+			p2.beginAttack(Player.attacks.attackMiddle);
+		}
 		// if(keyCode === 13) p2.beginAttack(Player.attacks.grab);
 	});
 
