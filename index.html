@@ -7,7 +7,7 @@
 	// load in all them images
 	var Assets = {
 		p1: {
-			'idle'          : './assets/p2/idle.png',
+			'idle'         : './assets/p2/idle.png',
 			'block_middle'  : './assets/p2/block_middle.png',
 			'block_low'     : './assets/p2/block_low.png',
 			'attack_middle' : './assets/p2/attack_middle.png',
@@ -35,31 +35,39 @@
 		});
 	});
 
-	// player class
+	/**
+	 * Player Class
+	 * @param int num 1 or 2
+	 */
 	function Player(num) {
 		this.num = num;
-		this.x = 50;
-		if(num === 2) {
-			this.x = 250;
+		this.init = function() {
+			if(this.isPlayerOne()) {
+				this.x = 50;
+				this.assets = Assets.p1;
+			} else {
+				this.x = 250;
+				this.assets = Assets.p2;
+			}
+			this.moveSpeed = 5;
+			this.keyState = {};
+			this.blockState = '';
+			this.currentAttack = null;
+			this.frameCounter = 0;
+			this.recoveryCounter = 0;
+			this.downCounter = 0;
+			this.hp = 100;
 		}
-		this.moveSpeed = 5;
-		this.keyState = {};
-		this.blockState = '';
-		this.currentAttack = null;
-		this.currentFrame = 0;
-		this.currentRecovery = 0;
-		this.currentDown = 0;
-		this.hp = 100;
-		this.assets = null;
-		if(this.num === 1) {
-			this.assets = Assets.p1;
-		} else {
-			this.assets = Assets.p2;
-		}
+
+		// What player am I!?
+		this.isPlayerOne = function() { return this.num === 1; }
+		this.isPlayerTwo = function() { return this.num === 2; }
 
 		this.updateMove = function() {
 			if(!this.canAct()) return false;
 
+			// move & block
+			// if you're not moving, you automatically middle block
 			if(this.keyState.left) {
 				this.x -= this.moveSpeed;
 				this.blockState = '';
@@ -78,6 +86,7 @@
 			} else if(this.x > 300) {
 				this.x = 300;
 			}
+
 			//push the other player if moving into him
 			if(this.num === 1) {
 				if(this.x + Player.width > p2.x) {
@@ -93,24 +102,27 @@
 		}
 		this.updateAttack = function() {
 			if(!!this.currentAttack) {
-				this.currentFrame -= 1;
-				if(this.currentFrame < 0) {
-					this.useAttack(this.currentAttack);
+				this.frameCounter -= 1;
+				if(this.frameCounter < 0) {
+					this.executeAttack(this.currentAttack);
 				}
 			}
 		}
 		this.updateRecovery = function() {
-			this.currentRecovery -= 1;
-			if(this.currentRecovery < 0) {
-				this.currentRecovery = 0;
+			this.recoveryCounter -= 1;
+			if(this.recoveryCounter < 0) {
+				this.recoveryCounter = 0;
 			}
 		}
 		this.updateDown = function() {
-			this.currentDown -= 1;
-			if(this.currentDown < 0) {
-				this.currentDown = 0;
+			this.downCounter -= 1;
+			if(this.downCounter < 0) {
+				this.downCounter = 0;
 			}
 		}
+		/**
+		 * Called every update frame.
+		 */
 		this.update = function() {
 			this.updateAttack();
 			this.updateRecovery();
@@ -118,7 +130,7 @@
 			this.updateMove();
 		}
 
-		this.getBlock = function() {
+		this.getBlockState = function() {
 			// can't block while not able to act
 			if(!this.canAct()) {
 				this.blockState = '';
@@ -126,10 +138,10 @@
 			return this.blockState;
 		}
 		this.isRecovering = function() {
-			return !!this.currentRecovery;
+			return !!this.recoveryCounter;
 		}
 		this.isDown = function() {
-			return !!this.currentDown;
+			return !!this.downCounter;
 		}
 		this.isAttacking = function() {
 			return !!this.currentAttack;
@@ -138,40 +150,50 @@
 			return (!this.isRecovering() && !this.isDown() && !this.isAttacking());
 		}
 
+		/**
+		 * Called when the user press an attack key
+		 * @param object attack What attack they're trying to use
+		 */
 		this.beginAttack = function(attack) {
 			if(!this.canAct()) return false;
 
 			this.resetStatus();
 			this.currentAttack = attack;
-			this.currentFrame = attack.speed;
+			this.frameCounter = attack.speed;
 		}
-		this.useAttack = function(attack) {
+		/**
+		 * After the entire animation for an attack has successfully finished.
+		 * Execute the attack. Did we miss? Did they block? Resolve all of this
+		 * add apply the necessary status to everyone
+		 */
+		this.executeAttack = function(attack) {
 			this.resetStatus();
+
 			var player = this.getOtherPlayer();
 			var isInRange = Player.isInRange(attack);
 			var isDown = player.isDown();
 			var isHit = isInRange && !isDown;
 			if(!isHit) {
-				this.currentRecovery = attack.recoveryMiss;
+				this.recoveryCounter = attack.recoveryMiss;
 				return false;
 			}
-			var isBlocked = $.inArray(player.getBlock(), attack.blockedBy) !== -1;
 
+			var isBlocked = $.inArray(player.getBlockState(), attack.blockedBy) !== -1;
 			if(isBlocked) {
-				this.currentRecovery = attack.recoveryBlocked;
-				player.currentRecovery = attack.stunBlocked;
+				this.recoveryCounter = attack.recoveryBlocked;
+				player.recoveryCounter = attack.stunBlocked;
 				return false;
 			}
 
 			// it was a hit and not blocked!
-			this.currentRecovery = attack.recovery;
+			this.recoveryCounter = attack.recovery;
 			player.hit(attack);
 			return true;
 		}
 		this.hit = function(attack) {
 			this.resetStatus();
 			this.hp -= attack.damage;
-			this.currentDown = attack.stun;
+			this.downCounter = attack.stun;
 		}
 
 		this.move = function(distance) {
@@ -183,10 +205,10 @@
 		}
 
 		this.resetStatus = function() {
-			this.currentFrame = 0;
-			this.currentRecovery = 0;
+			this.frameCounter = 0;
+			this.recoveryCounter = 0;
 			this.currentAttack = null;
-			this.currentDown = 0;
+			this.downCounter = 0;
 			this.blockState = '';
 		}
 		this.getOtherPlayer = function() {
@@ -196,8 +218,11 @@
 				return p1;
 			}
 		}
+		/**
+		 * Called every render frame
+		 */
 		this.draw = function(c) {
-			var block = this.getBlock();
+			var block = this.getBlockState();
 			var scale = (this.num === 2) ? -1 : 1;
 			var x = this.x + 100;
 			var y = Player.height;
@@ -209,6 +234,7 @@
 			c.save();
 			c.scale(scale, 1);
 
+			// what are we currently doing? what animation should we use?
 			if(!!this.currentAttack) {
 				c.drawImage(this.assets[this.currentAttack.sprite], x, y);
 			} else {
@@ -232,6 +258,8 @@
 
 			c.restore();
 		}
+
+		this.init();
 	}
 	Player.getDistance = function() {
 		return Math.abs(p1.x - p2.x) - Player.width;
@@ -334,20 +362,20 @@
 
 
 	// shim layer with setTimeout fallback
-    window.requestAnimFrame = (function() {
-    	return  function( callback ){
-                window.setTimeout(callback, 1000 / 60);
-              };
+	window.requestAnimFrame = (function() {
+		return  function( callback ){
+			window.setTimeout(callback, 1000 / 60);
+		};
 
-      return  window.requestAnimationFrame       || 
-              window.webkitRequestAnimationFrame || 
-              window.mozRequestAnimationFrame    || 
-              window.oRequestAnimationFrame      || 
-              window.msRequestAnimationFrame     || 
-              function( callback ){
-                window.setTimeout(callback, 1000 / 60);
-              };
-    })();
+		return  window.requestAnimationFrame   ||
+		window.webkitRequestAnimationFrame ||
+		window.mozRequestAnimationFrame    ||
+		window.oRequestAnimationFrame      ||
+		window.msRequestAnimationFrame     ||
+		function( callback ){
+			window.setTimeout(callback, 1000 / 60);
+		};
+	})();
 
 	function startGame() {
 		// drawing
@@ -360,10 +388,10 @@
 
 		// update loop
 		(function updateLoop() {
-	    	requestAnimFrame(updateLoop);
+			requestAnimFrame(updateLoop);
 
-	    	p1.update();
-	 		p2.update();
+			p1.update();
+			p2.update();
 		})();
 
 		// render loop
