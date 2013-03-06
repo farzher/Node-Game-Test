@@ -40,7 +40,7 @@ module.exports = new function() {
 						//let the other player know that they won and close the game room
 						game.exit(socket);
 						//remove the game from the games array
-						_.reject(Game.games, function(game) {
+						_.reject(games, function(game) {
 							return game.gameId === gameId;
 						});
 					});

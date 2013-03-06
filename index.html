@@ -1,424 +1,132 @@
-<script src="http://cdnjs.cloudflare.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
-<script src="http://cdnjs.cloudflare.com/ajax/libs/underscore.js/1.4.4/underscore-min.js"></script>
-
 <canvas id="canvas"></canvas>
-
+<script src="http://cdnjs.cloudflare.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+<script src="http://cdnjs.cloudflare.com/ajax/libs/socket.io/0.9.10/socket.io.min.js"></script>
+<script src="http://cdnjs.cloudflare.com/ajax/libs/underscore.js/1.4.4/underscore-min.js"></script>
 <script>
-	// load in all them images
-	var Assets = {
-		p1: {
-			'idle'         : './assets/p2/idle.png',
-			'block_middle'  : './assets/p2/block_middle.png',
-			'block_low'     : './assets/p2/block_low.png',
-			'attack_middle' : './assets/p2/attack_middle.png',
-			'attack_low'    : './assets/p2/attack_low.png',
-			'attack_high'   : './assets/p2/attack_high.png',
-			'down'          : './assets/p2/down.png',
-			'recovering'    : './assets/p2/recovering.png',
-		},
-		p2: {
-			'idle'          : './assets/p2/idle.png',
-			'block_middle'  : './assets/p2/block_middle.png',
-			'block_low'     : './assets/p2/block_low.png',
-			'attack_middle' : './assets/p2/attack_middle.png',
-			'attack_low'    : './assets/p2/attack_low.png',
-			'attack_high'   : './assets/p2/attack_high.png',
-			'down'          : './assets/p2/down.png',
-			'recovering'    : './assets/p2/recovering.png',
-		}
-	};
-	_.each(Assets, function(v1, k1) {
-		_.each(v1, function(v2, k2) {
-			var img = new Image();
-			img.src = v2;
-			Assets[k1][k2] = img;
+// load in all them images
+var Assets = {
+	'idle'          : './assets/p2/idle.png',
+	'block_middle'  : './assets/p2/block_middle.png',
+	'block_low'     : './assets/p2/block_low.png',
+	'attack_middle' : './assets/p2/attack_middle.png',
+	'attack_low'    : './assets/p2/attack_low.png',
+	'attack_high'   : './assets/p2/attack_high.png',
+	'down'          : './assets/p2/down.png',
+	'recovering'    : './assets/p2/recovering.png',
+};
+_.each(Assets, function(v, k) {
+	var img = new Image();
+	img.src = v;
+	Assets[k] = img;
+});
+
+
+(function() {
+	// shim layer with setTimeout fallback
+    window.requestAnimFrame = (function() {
+      return  window.requestAnimationFrame       || 
+              window.webkitRequestAnimationFrame || 
+              window.mozRequestAnimationFrame    || 
+              window.oRequestAnimationFrame      || 
+              window.msRequestAnimationFrame     || 
+              function( callback ){
+                window.setTimeout(callback, 1000 / 60);
+              };
+    })();
+
+	//connection logic
+	var socket = io.connect('http://71.246.26.9:25565');
+	var settings = {};
+	var id;
+	socket.on('id', function(data) {
+		id = data;
+	});
+	socket.on('settings', function(data) {
+		settings = data;
+		startGame();
+	});
+	var state = {p: []};
+	socket.on('state', function(data) {
+		_.each(data.p, function(value, key) {
+			state.p[key] = _.extend(state.p[key] || {}, value);
 		});
 	});
 
-	/**
-	 * Player Class
-	 * @param int num 1 or 2
-	 */
-	function Player(num) {
-		this.num = num;
-		this.init = function() {
-			if(this.isPlayerOne()) {
-				this.x = 50;
-				this.assets = Assets.p1;
-			} else {
-				this.x = 250;
-				this.assets = Assets.p2;
+	function Player(socket) {
+		var player = this;
+		player.id = id;
+		player.socket = socket;
+		player.keyState = {};
+
+		//player does all of its own event management
+		//this setup doesn't spam key events while held down
+		$(window).on('keydown', function(e) {
+			var keyCode = e.which;
+			var lastState = player.keyState[keyCode];
+			var currentState = player.keyState[keyCode] = true;
+			if(lastState !== currentState) {
+				socket.emit('keydown', keyCode);
 			}
-			this.moveSpeed = 5;
-			this.keyState = {};
-			this.blockState = '';
-			this.currentAttack = null;
-			this.frameCounter = 0;
-			this.recoveryCounter = 0;
-			this.downCounter = 0;
-			this.hp = 100;
-		}
-
-		// What player am I!?
-		this.isPlayerOne = function() { return this.num === 1; }
-		this.isPlayerTwo = function() { return this.num === 2; }
-
-		this.updateMove = function() {
-			if(!this.canAct()) return false;
-
-			// move & block
-			// if you're not moving, you automatically middle block
-			if(this.keyState.left) {
-				this.x -= this.moveSpeed;
-				this.blockState = '';
-			} else if(this.keyState.right) {
-				this.x += this.moveSpeed;
-				this.blockState = '';
-			} else if(this.keyState.down) {
-				this.blockState = 'low';	
-			} else {
-				this.blockState = 'middle';
+		});
+		$(window).on('keyup', function(e) {
+			var keyCode = e.which;
+			var lastState = player.keyState[keyCode];
+			var currentState = player.keyState[keyCode] = false;
+			if(lastState !== currentState) {
+				socket.emit('keyup', keyCode);
 			}
-
-			// don't move out of bounds
-			if(this.x < 0) {
-				this.x = 0;
-			} else if(this.x > 300) {
-				this.x = 300;
-			}
-
-			//push the other player if moving into him
-			if(this.num === 1) {
-				if(this.x + Player.width > p2.x) {
-					p2.x = this.x + Player.width;
-				}
-			} else {
-				if(this.x - Player.width < p1.x) {
-					p1.x = this.x - Player.width;
-				}
-			}
-
-			return true;
-		}
-		this.updateAttack = function() {
-			if(!!this.currentAttack) {
-				this.frameCounter -= 1;
-				if(this.frameCounter < 0) {
-					this.executeAttack(this.currentAttack);
-				}
-			}
-		}
-		this.updateRecovery = function() {
-			this.recoveryCounter -= 1;
-			if(this.recoveryCounter < 0) {
-				this.recoveryCounter = 0;
-			}
-		}
-		this.updateDown = function() {
-			this.downCounter -= 1;
-			if(this.downCounter < 0) {
-				this.downCounter = 0;
-			}
-		}
-		/**
-		 * Called every update frame.
-		 */
-		this.update = function() {
-			this.updateAttack();
-			this.updateRecovery();
-			this.updateDown();
-			this.updateMove();
-		}
-
-		this.getBlockState = function() {
-			// can't block while not able to act
-			if(!this.canAct()) {
-				this.blockState = '';
-			}
-			return this.blockState;
-		}
-		this.isRecovering = function() {
-			return !!this.recoveryCounter;
-		}
-		this.isDown = function() {
-			return !!this.downCounter;
-		}
-		this.isAttacking = function() {
-			return !!this.currentAttack;
-		}
-		this.canAct = function() {
-			return (!this.isRecovering() && !this.isDown() && !this.isAttacking());
-		}
-
-		/**
-		 * Called when the user press an attack key
-		 * @param object attack What attack they're trying to use
-		 */
-		this.beginAttack = function(attack) {
-			if(!this.canAct()) return false;
-
-			this.resetStatus();
-			this.currentAttack = attack;
-			this.frameCounter = attack.speed;
-		}
-		/**
-		 * After the entire animation for an attack has successfully finished.
-		 * Execute the attack. Did we miss? Did they block? Resolve all of this
-		 * add apply the necessary status to everyone
-		 */
-		this.executeAttack = function(attack) {
-			this.resetStatus();
-
-			var player = this.getOtherPlayer();
-			var isInRange = Player.isInRange(attack);
-			var isDown = player.isDown();
-			var isHit = isInRange && !isDown;
-			if(!isHit) {
-				this.recoveryCounter = attack.recoveryMiss;
-				return false;
-			}
-
-			var isBlocked = $.inArray(player.getBlockState(), attack.blockedBy) !== -1;
-			if(isBlocked) {
-				this.recoveryCounter = attack.recoveryBlocked;
-				player.recoveryCounter = attack.stunBlocked;
-				return false;
-			}
-
-			// it was a hit and not blocked!
-			this.recoveryCounter = attack.recovery;
-			player.hit(attack);
-			return true;
-		}
-		this.hit = function(attack) {
-			this.resetStatus();
-			this.hp -= attack.damage;
-			this.downCounter = attack.stun;
-		}
-
-		this.move = function(distance) {
-			if(this.num === 1) {
-				this.x += distance;
-			} else {
-				this.x -= distance;
-			}
-		}
-
-		this.resetStatus = function() {
-			this.frameCounter = 0;
-			this.recoveryCounter = 0;
-			this.currentAttack = null;
-			this.downCounter = 0;
-			this.blockState = '';
-		}
-		this.getOtherPlayer = function() {
-			if(this.num === 1) {
-				return p2;
-			} else {
-				return p1;
-			}
-		}
-		/**
-		 * Called every render frame
-		 */
-		this.draw = function(c) {
-			var block = this.getBlockState();
-			var scale = (this.num === 2) ? -1 : 1;
-			var x = this.x + 100;
-			var y = Player.height;
-			if(scale === -1) {
-				x *= -1;
-				x -= Player.width;
-			}
-
-			c.save();
-			c.scale(scale, 1);
-
-			// what are we currently doing? what animation should we use?
-			if(!!this.currentAttack) {
-				c.drawImage(this.assets[this.currentAttack.sprite], x, y);
-			} else {
-				if(!this.canAct()) {
-					if(this.isDown()) {
-						c.drawImage(this.assets.down, x, y);
-					} else if(this.isRecovering()) {
-						c.drawImage(this.assets.recovering, x, y);
-					}
-				} else {
-					if(block == 'middle') {
-						c.drawImage(this.assets.block_middle, x, y);
-					} else if(block == 'low') {
-						c.drawImage(this.assets.block_low, x, y);
-					} else {
-						c.drawImage(this.assets.idle, x, y);
-					}
-				}
-				
-			}
-
-			c.restore();
-		}
-
-		this.init();
+		});
 	}
-	Player.getDistance = function() {
-		return Math.abs(p1.x - p2.x) - Player.width;
-	}
-	Player.isInRange = function(attack) {
-		return (Player.getDistance() <= attack.range);
-	}
-	Player.width = 67;
-	Player.height = 94;
-	Player.attacks = {
-		attackMiddle: {
-			damage: 1,
-			speed: 20,
-			recovery: 10,
-			recoveryMiss: 10,
-			recoveryBlocked: 10,
-			stun: 20,
-			stunBlocked: 5,
-			range: 10,
-			blockedBy: ['middle', 'low'],
-			sprite: 'attack_middle'
-		},
-		attackHigh: {
-			damage: 2,
-			speed: 30,
-			recovery: 20,
-			recoveryMiss: 20,
-			recoveryBlocked: 20,
-			stun: 40,
-			stunBlocked: 5,
-			range: 10,
-			blockedBy: ['middle'],
-			sprite: 'attack_high'
-		},
-		attackLow: {
-			damage: 2,
-			speed: 30,
-			recovery: 20,
-			recoveryMiss: 20,
-			recoveryBlocked: 20,
-			stun: 40,
-			stunBlocked: 5,
-			range: 10,
-			blockedBy: ['low'],
-			sprite: 'attack_low'
-		},
-		grab: {
-			damage: 2,
-			speed: 8,
-			recovery: 8,
-			recoveryMiss: 8,
-			recoveryBlocked: 12,
-			stun: 5,
-			stunBlocked: 5,
-			range: 0,
-			blockedBy: []
-		}
-	};
 
-	// init
-	var p1 = new Player(1);
-	var p2 = new Player(2);
-
-	// handle keyboard inputs
-	$(document).on('keydown', function(e) {
-		var keyCode = e.which;
-		if(keyCode === 65) p1.keyState.left = true;
-		if(keyCode === 87) p1.keyState.up = true;
-		if(keyCode === 68) p1.keyState.right = true;
-		if(keyCode === 83) p1.keyState.down = true;
-
-		if(keyCode === 37) p2.keyState.left = true;
-		if(keyCode === 38) p2.keyState.up = true;
-		if(keyCode === 39) p2.keyState.right = true;
-		if(keyCode === 40) p2.keyState.down = true;
-	});
-	$(document).on('keyup', function(e) {
-		var keyCode = e.which;
-		if(keyCode === 65) p1.keyState.left = false;
-		if(keyCode === 87) p1.keyState.up = false;
-		if(keyCode === 68) p1.keyState.right = false;
-		if(keyCode === 83) p1.keyState.down = false;
-		if(p1.keyState.up && keyCode === 74) {
-			p1.beginAttack(Player.attacks.attackHigh);
-		} else if(p1.keyState.down && keyCode === 74) {
-			p1.beginAttack(Player.attacks.attackLow);
-		} else if(keyCode === 74) {
-			p1.beginAttack(Player.attacks.attackMiddle);
-		}
-		// if(keyCode === 186) p1.beginAttack(Player.attacks.grab);
-
-		if(keyCode === 37) p2.keyState.left = false;
-		if(keyCode === 38) p2.keyState.up = false;
-		if(keyCode === 39) p2.keyState.right = false;
-		if(keyCode === 40) p2.keyState.down = false;
-		if(p2.keyState.up && keyCode === 96) {
-			p2.beginAttack(Player.attacks.attackHigh);
-		} else if(p2.keyState.down && keyCode === 96) {
-			p2.beginAttack(Player.attacks.attackLow);
-		} else if(keyCode === 96) {
-			p2.beginAttack(Player.attacks.attackMiddle);
-		}
-		// if(keyCode === 13) p2.beginAttack(Player.attacks.grab);
-	});
-
-
-
-
-
-	// shim layer with setTimeout fallback
-	window.requestAnimFrame = (function() {
-		return  function( callback ){
-			window.setTimeout(callback, 1000 / 60);
-		};
-
-		return  window.requestAnimationFrame   ||
-		window.webkitRequestAnimationFrame ||
-		window.mozRequestAnimationFrame    ||
-		window.oRequestAnimationFrame      ||
-		window.msRequestAnimationFrame     ||
-		function( callback ){
-			window.setTimeout(callback, 1000 / 60);
-		};
-	})();
-
+	// when we get our settings, start rendering the game
 	function startGame() {
+		//we're done loading, let's go
+		var player = new Player(socket);
+
 		// drawing
 		var canvas = document.getElementById('canvas');
 		var c = canvas.getContext('2d');
-		var w = 640;
-	    var h = 280;
+		var w = settings.width + 200;
+	    var h = 250;
 		c.canvas.width  = w;
 		c.canvas.height = h;
 
 		// update loop
 		(function updateLoop() {
-			requestAnimFrame(updateLoop);
+	    	requestAnimFrame(updateLoop);
+	    	//
 
-			p1.update();
-			p2.update();
+
 		})();
 
-		// render loop
-		(function renderLoop() {
-			requestAnimFrame(renderLoop);
+	    // render loop
+	    (function renderLoop() {
+	    	requestAnimFrame(renderLoop);
+	    	//
 
-			//redraw a background
+	    	if(!state) return;
+			//state is loaded
+
+	    	//redraw a white background
 			c.fillStyle = "rgb(255, 200, 200)";
 			c.fillRect(0, 0, w, h);
 
 			//draw the players
-			p1.draw(c);
-			p2.draw(c);
+			_.each(state.p, function(p) {
+				var scale = (p.num === 2) ? -1 : 1;
+				var x = p.x + 100;
+				var y = 100;
+				if(scale === -1) {
+					x *= -1;
+					x -= settings.player.width;
+				}
 
-			// draw the hp
-			c.fillStyle = "Green";
-			c.fillText(p1.hp, 20, 250);
-			c.fillText(p2.hp, 500, 250);
+				c.save();
+				c.scale(scale, 1);
+				c.drawImage(Assets[p.sprite], x, y);
+				c.restore();
+			});
 		})();
 	}
-	startGame();
+})();
 </script>
