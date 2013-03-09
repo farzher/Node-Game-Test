@@ -53,12 +53,36 @@ var GF = new function() {
 			if(sockets.length === playerCount) {
 				//when playerCount players are in the matchmaking room
 				//make a new unique game; put everyone into that game, and kick them out of mm lobby
-				//game object will initilize itself
-				var game = new Game(Gameplay, sockets);
+				var game = new Game(Gameplay);
+
+				//add all players to the new game
+				_.each(sockets, function(socket) {
+					socket.leave('mm');
+					socket.join(game.gameId);
+					socket.on('disconnect', function() {
+						game.exit(socket);
+					});
+					var player = new Player(socket);
+					game.addPlayer(player);
+				});
+
+				//start the game when everything is good
+				game.start();
 			}
 		});
 		return true;
 	}
+}
+
+/**
+ * Each connected player is attached to one of these
+ * it keeps track of their keystate and stuff
+ */
+function Player(socket) {
+	var self = this;
+	self.socket = socket;
+	self.keyState = {};
+	self.state = {};
 }
 
 /**
@@ -70,42 +94,33 @@ var GF = new function() {
  * @param class Gameplay
  * @param io.sockets sockets All the connected players in this room only
  */
-function Game(Gameplay, sockets) {
+function Game(Gameplay) {
 	var self = this;
 	self.gameId = _.uniqueId('gameId');
-	self.sockets = sockets;
 	self.gameplay = undefined;
+	self.sockets = undefined;
+	self.players = [];
 	self.state = {};
-
-	//add all players to the new game room
-	_.each(self.sockets, function(socket) {
-		socket.join(self.gameId);
-		socket.leave('mm');
-		socket.on('disconnect', function() {
-			//when a plyer disconnects, they forfeit the game
-			//let the other player know that they won and close the game room
-			self.exit(socket);
-			//remove the game from the games array
-			_.reject(self.games, function(self) {
-				return self.gameId === gameId;
-			});
-		});
-	});
-
-	//after the players have been added, start the game
-	self.gameplay = new Gameplay(self);
 
 	/**
 	 * emit, it's awesome
 	 */
 	self.emit = function(message, data) {
-		self.sockets.emit(message, data);
+		GF.io.sockets.in(self.gameId).emit(message, data);
 	}
 	/**
-	 * volatile, also awesmoe
+	 * volatile, also awesome
 	 */
 	self.volatile = function(message, data) {
-		self.sockets.volatile.emit(message, data);
+		GF.io.sockets.in(self.gameId).volatile(message, data);
+	}
+
+	/**
+	 * [addPlayer description]
+	 * @param Player player [description]
+	 */
+	self.addPlayer = function(player) {
+		self.players.push(player);
 	}
 
 	/**
@@ -114,7 +129,18 @@ function Game(Gameplay, sockets) {
 	 * socket is the player that left
 	 */
 	self.exit = function(socket) {
+		//remove the game from the games array
+		GF.games = _.reject(GF.games, function(game) {
+			return game.gameId === self.gameId;
+		});
+	}
 
+	/**
+	 * [start description]
+	 */
+	self.start = function() {
+		self.sockets = GF.io.sockets.clients(self.gameId);
+		self.gameplay = new Gameplay(self);
 	}
 }
 

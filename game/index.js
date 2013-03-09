@@ -297,22 +297,20 @@ Player.attacks = {
 	}
 };
 
-function Game(gameId, io) {
+function Game(game) {
 	var self = this;
-	self.gameId = gameId;
-	self.io = io;
+	self.game = game;
 	self.players = [];
 	self.state = {};
 	self.p1 = null;
 	self.p2 = null;
 
-	self.start = function() {
+	self.init = function() {
 		//send each player game settings
-		self.emit('settings', Game.settings);
+		self.game.emit('settings', Game.settings);
 		//get each player connected, and add them to the game
-		var sockets = io.sockets.clients(self.gameId);
 		var num = 1;
-		_.each(sockets, function(socket) {
+		_.each(self.game.sockets, function(socket) {
 			var player = new Player(num, socket, self);
 			self.addPlayer(player);
 			num += 1;
@@ -345,7 +343,7 @@ function Game(gameId, io) {
 		}
 		//only emit the state if anything has changed
 		if(!isEmpty) {
-			self.emit('state', state);
+			self.game.emit('state', state);
 		}
 	}
 
@@ -359,13 +357,6 @@ function Game(gameId, io) {
 
 		self.state = state;
 		return state;
-	}
-
-	self.emit = function(message, data) {
-		self.io.sockets.in(self.gameId).emit(message, data);
-	}
-	self.volatile = function(message, data) {
-		self.io.sockets.in(self.gameId).volatile.emit(message, data);
 	}
 
 	//when a player disconnects, they forfeit the game
@@ -383,6 +374,8 @@ function Game(gameId, io) {
 			self.p2 = player;
 		}
 	}
+
+	self.init();
 }
 Game.settings = {
 	fps: 30,
