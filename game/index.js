@@ -17,7 +17,7 @@ function Player(num, socket, game) {
 		} else {
 			self.x = 250;
 		}
-		self.moveSpeed = 5;
+		self.moveSpeed = 10;
 		self.keyState = {};
 		self.state = {};
 		self.blockState = '';
@@ -218,13 +218,13 @@ function Player(num, socket, game) {
 	self.socket.on('keyup', function(keyCode) {
 		self.keyState[keyCode] = false;
 
-		if(keyCode == 96) {
+		if(keyCode == 90) {
 			if(self.keyState[38]) {
 				self.beginAttack(Player.attacks.attackHigh);
 			} else if(self.keyState[40]) {
 				self.beginAttack(Player.attacks.attackLow);
 			} else {
-				self.beginAttack(Player.attacks.attackMiddle);
+				self.beginAttack(Player.attacks.attackHigh);
 			}
 		}
 	});
@@ -259,38 +259,38 @@ Player.isInRange = function(attack, game) {
 	return (Player.getDistance(game) <= attack.range);
 }
 Player.attacks = {
-	attackMiddle: {
-		damage: 1,
-		speed: 2,
-		recovery: 50,
-		recoveryMiss: 50,
-		recoveryBlocked: 50,
-		stun: 40,
-		stunBlocked: 10,
-		range: 10,
-		blockedBy: ['middle', 'low'],
-		sprite: 'attack_middle'
-	},
+	// attackMiddle: {
+	// 	damage: 1,
+	// 	speed: 5,
+	// 	recovery: 25,
+	// 	recoveryMiss: 25,
+	// 	recoveryBlocked: 25,
+	// 	stun: 30,
+	// 	stunBlocked: 5,
+	// 	range: 10,
+	// 	blockedBy: ['middle', 'low'],
+	// 	sprite: 'attack_middle'
+	// },
 	attackHigh: {
 		damage: 2,
-		speed: 2,
-		recovery: 50,
-		recoveryMiss: 50,
-		recoveryBlocked: 50,
-		stun: 40,
-		stunBlocked: 10,
+		speed: 5,
+		recovery: 10,
+		recoveryMiss: 10,
+		recoveryBlocked: 10,
+		stun: 30,
+		stunBlocked: 5,
 		range: 15,
 		blockedBy: ['middle'],
-		sprite: 'attack_high'
+		sprite: 'attack_middle'
 	},
 	attackLow: {
 		damage: 2,
-		speed: 2,
-		recovery: 50,
-		recoveryMiss: 50,
-		recoveryBlocked: 50,
-		stun: 40,
-		stunBlocked: 10,
+		speed: 5,
+		recovery: 10,
+		recoveryMiss: 10,
+		recoveryBlocked: 10,
+		stun: 30,
+		stunBlocked: 5,
 		range: 15,
 		blockedBy: ['low'],
 		sprite: 'attack_low'
@@ -385,7 +385,7 @@ function Game(gameId, io) {
 	}
 }
 Game.settings = {
-	fps: 60,
+	fps: 30,
 	width: 300,
 	player: {
 		width: 67,
