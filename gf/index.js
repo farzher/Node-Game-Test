@@ -5,11 +5,11 @@ var _ = require('underscore');
 /**
  * Main entry point for the user!!!!
  * They just listen to a port
- * then pass their Gameplay class in here and they're good to go
+ * then pass their GameClass class in here and they're good to go
  * 
  * <code>
  * gf.listen(port);
- * gf.matchmaking(Gameplay, playerCount);
+ * gf.matchmaking(GameClass, PlayerClass, playerCount);
  * </code>
  */
 var GF = new function() {
@@ -27,12 +27,13 @@ var GF = new function() {
 	}
 
 	/**
-	 * User passes their Gameplay class into here.
-	 * the Gameplay class should accept a Game class as it's only argument.
-	 * @param  class Gameplay
+	 * User passes their GameClass class into here.
+	 * the GameClass class should accept a Game class as it's only argument.
+	 * @param  class GameClass
+	 * @param class PlayerClass
 	 * @param  int playerCount
 	 */
-	self.matchmaking = function(Gameplay, playerCount) {
+	self.matchmaking = function(GameClass, PlayerClass, playerCount) {
 		// errors checking
 		if(self.io === undefined) {
 			console.log('You must first listen to a port');
@@ -44,14 +45,14 @@ var GF = new function() {
 		}
 
 		self.io.sockets.on('connection', function(socket) {
-			var player = new Player(socket);
+			var player = new Player(PlayerClass, socket);
 			player.joinMm();
 
 			var players = self.getPlayersInMm();
 			if(players.length === playerCount) {
 				//when playerCount players are in the matchmaking room
 				//make a new unique game; put everyone into that game, and kick them out of mm lobby
-				var game = new Game(Gameplay);
+				var game = new Game(GameClass);
 
 				//add all players to the new game
 				_.each(players, function(player) {
@@ -94,8 +95,9 @@ var GF = new function() {
  * it keeps track of their keystate and stuff
  * Each game has an array of these guys
  */
-function Player(socket) {
+function Player(PlayerClass, socket) {
 	var self = this;
+	self.player = new PlayerClass(self);
 	self.socket = socket;
 	self.id = socket.id
 	self.keyState = {};
@@ -148,19 +150,18 @@ function Player(socket) {
 }
 
 /**
- * A single instance of a game room. Based on the supplied Gameplay class
- * this handles all the connected users and provides functions to the Gameplay
+ * A single instance of a game room. Based on the supplied GameClass class
+ * this handles all the connected users and provides functions to the GameClass
  * class like emit, etc.
  * This also has the current game state object
  * 
- * @param class Gameplay
+ * @param class GameClass
  * @param io.sockets sockets All the connected players in this room only
  */
-function Game(Gameplay) {
+function Game(GameClass) {
 	var self = this;
 	self.gameId = _.uniqueId('gameId');
-	self.gameplay = undefined;
-	self.sockets = undefined;
+	self.GameClass = undefined;
 	self.players = [];
 	self.state = {};
 
@@ -195,8 +196,7 @@ function Game(Gameplay) {
 	 * [start description]
 	 */
 	self.start = function() {
-		self.sockets = GF.io.sockets.clients(self.gameId);
-		self.gameplay = new Gameplay(self);
+		self.GameClass = new GameClass(self);
 	}
 }
 

@@ -4,12 +4,9 @@ var _ = require('underscore');
  * Player Class
  * @param int num 1 or 2
  */
-function Player(num, socket, game) {
+function Player(player) {
 	var self = this;
-	self.num = num;
-	self.socket = socket;
-	self.game = game;
-	self.id = socket.id;
+	self.player = player;
 
 	self.init = function() {
 		if(self.isPlayerOne()) {
@@ -259,18 +256,6 @@ Player.isInRange = function(attack, game) {
 	return (Player.getDistance(game) <= attack.range);
 }
 Player.attacks = {
-	// attackMiddle: {
-	// 	damage: 1,
-	// 	speed: 5,
-	// 	recovery: 25,
-	// 	recoveryMiss: 25,
-	// 	recoveryBlocked: 25,
-	// 	stun: 30,
-	// 	stunBlocked: 5,
-	// 	range: 10,
-	// 	blockedBy: ['middle', 'low'],
-	// 	sprite: 'attack_middle'
-	// },
 	attackHigh: {
 		damage: 2,
 		speed: 5,
@@ -386,4 +371,5 @@ Game.settings = {
 	}
 };
 
-module.exports = Game;
+module.exports.Game = Game;
+module.exports.Player = Player;

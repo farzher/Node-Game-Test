@@ -6,4 +6,4 @@ var port = process.env.PORT || 25565;
 
 //matchmaking
 gf.listen(port);
-gf.matchmaking(Game, 2);
+gf.matchmaking(Game.Game, Game.Player, 2);
