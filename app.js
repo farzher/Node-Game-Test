@@ -1,7 +1,8 @@
 // imports
-var port = process.env.PORT || 25565;
 var gf = require('./gf');
 var Game = require('./game');
+
+var port = process.env.PORT || 25565;
 
 //matchmaking
 gf.listen(port);
