@@ -16,6 +16,7 @@ var GF = new function() {
 	var self = this;
 	self.io = undefined;
 	self.games = [];
+	self.players = [];
 
 	/**
 	 * User should call this first. And only once
@@ -43,27 +44,18 @@ var GF = new function() {
 		}
 
 		self.io.sockets.on('connection', function(socket) {
-			//tell the player what their id is
-			socket.emit('id', socket.id);
+			var player = new Player(socket);
+			player.joinMm();
 
-			//when a player connects to the server, put them in the matchmaking room
-			socket.join('mm');
-
-			var sockets = self.io.sockets.clients('mm');
-			if(sockets.length === playerCount) {
+			var players = self.getPlayersInMm();
+			if(players.length === playerCount) {
 				//when playerCount players are in the matchmaking room
 				//make a new unique game; put everyone into that game, and kick them out of mm lobby
 				var game = new Game(Gameplay);
 
 				//add all players to the new game
-				_.each(sockets, function(socket) {
-					socket.leave('mm');
-					socket.join(game.gameId);
-					socket.on('disconnect', function() {
-						game.exit(socket);
-					});
-					var player = new Player(socket);
-					game.addPlayer(player);
+				_.each(players, function(player) {
+					player.joinGame(game);
 				});
 
 				//start the game when everything is good
@@ -72,17 +64,87 @@ var GF = new function() {
 		});
 		return true;
 	}
+
+	self.getPlayerBySocket = function(socket) {
+		var player = undefined;
+		_.every(self.players, function(v) {
+			if(v.socket === socket) {
+				player = v;
+				return false;
+			}
+			return true;
+		});
+		return player;
+	}
+	self.getPlayersInMm = function() {
+		var sockets = self.io.sockets.clients('mm');
+		var players = [];
+		_.each(sockets, function(socket) {
+			var player = self.getPlayerBySocket(socket);
+			if(player) {
+				players.push(player);
+			}
+		});
+		return players;
+	}
 }
 
 /**
  * Each connected player is attached to one of these
  * it keeps track of their keystate and stuff
+ * Each game has an array of these guys
  */
 function Player(socket) {
 	var self = this;
 	self.socket = socket;
+	self.id = socket.id
 	self.keyState = {};
 	self.state = {};
+	self.game = undefined;
+
+	/**
+	 * tell the player what their id is
+	 */
+	self.init = function() {
+		GF.players.push(self);
+		self.emit('id', self.id);
+
+		//clean up stuff when the player loses connection
+		self.socket.on('disconnect', function() {
+			if(self.game) {
+				self.game.exit(self);
+			}
+			GF.players = _.reject(GF.players, function(player) {
+				return (player.socket === self.socket);
+			});
+		});
+
+		//player listens for its key events and keeps it's internal keyState up to date
+		self.socket.on('keydown', function(keyCode) {
+			self.keyState[keyCode] = true;
+		});
+		self.socket.on('keyup', function(keyCode) {
+			self.keyState[keyCode] = false;
+		});
+	}
+	self.emit = function(message, data) {
+		self.socket.emit(message, data);
+	}
+	self.volatile = function(message, data) {
+		self.socket.volatile(message, data);
+	}
+	self.joinMm = function() {
+		self.game = undefined;
+		self.socket.join('mm');
+	}
+	self.joinGame = function(game) {
+		self.game = game;
+		self.socket.leave('mm');
+		self.socket.join(game.gameId);
+		self.game.addPlayer(self);
+	}
+
+	self.init();
 }
 
 /**
@@ -102,15 +164,9 @@ function Game(Gameplay) {
 	self.players = [];
 	self.state = {};
 
-	/**
-	 * emit, it's awesome
-	 */
 	self.emit = function(message, data) {
 		GF.io.sockets.in(self.gameId).emit(message, data);
 	}
-	/**
-	 * volatile, also awesome
-	 */
 	self.volatile = function(message, data) {
 		GF.io.sockets.in(self.gameId).volatile(message, data);
 	}
